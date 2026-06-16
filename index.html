@@ -8,82 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&family=Heebo:wght@400;700;800;900&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script>
-  // =====================
-  // REACTIONS & COMMENTS
-  // =====================
-  window.toggleEmojiPicker=function(entryId){
-    var ep=document.getElementById('ep-'+entryId);
-    if(!ep)return;
-    var isOpen=ep.classList.contains('open');
-    // close all others
-    document.querySelectorAll('.emoji-picker.open').forEach(function(el){el.classList.remove('open');});
-    if(!isOpen)ep.classList.add('open');
-  };
 
-  window.pickEmoji=function(entryId,emoji){
-    var ep=document.getElementById('ep-'+entryId);
-    if(ep)ep.classList.remove('open');
-    toggleReaction(entryId,emoji);
-  };
-
-  window.toggleReaction=function(entryId,emoji){
-    if(!state.player){alert('בחר מפיק קודם');return;}
-    var myKey=state.player.key;
-    var current=state.reactions&&state.reactions[entryId]&&state.reactions[entryId][myKey];
-    var path='reactions/'+entryId+'/'+myKey;
-    if(current===emoji){
-      // הסר תגובה
-      window.fbRemove(window.fbRef(window.fbDb,path));
-    } else {
-      // הוסף/שנה תגובה
-      window.fbSet(window.fbRef(window.fbDb,path),emoji);
-    }
-  };
-
-  window.toggleComments=function(entryId){
-    var cs=document.getElementById('cs-'+entryId);
-    var tc=document.getElementById('tc-'+entryId);
-    if(!cs)return;
-    var open=cs.style.display==='block';
-    cs.style.display=open?'none':'block';
-    if(tc){
-      var comments=state.comments&&state.comments[entryId]?Object.values(state.comments[entryId]):{};
-      var count=Object.keys(comments).length;
-      tc.innerHTML=open?(count>0?'💬 '+count+' תגובות ▸':'💬 הגב'):(count>0?'💬 '+count+' תגובות ▾':'💬 הגב ▾');
-    }
-    // focus input
-    if(!open){
-      var ci=document.getElementById('ci-'+entryId);
-      if(ci)setTimeout(function(){ci.focus();},50);
-    }
-  };
-
-  window.sendComment=function(entryId){
-    if(!state.player){alert('בחר מפיק קודם');return;}
-    var ci=document.getElementById('ci-'+entryId);
-    if(!ci)return;
-    var text=ci.value.trim();
-    if(!text)return;
-    var commentId='c_'+Date.now();
-    var comment={
-      player:state.player.key,
-      playerName:state.player.name,
-      text:text,
-      t:Date.now()
-    };
-    window.fbSet(window.fbRef(window.fbDb,'comments/'+entryId+'/'+commentId),comment);
-    ci.value='';
-  };
-
-  // Close emoji picker when clicking outside
-  document.addEventListener('click',function(e){
-    if(!e.target.closest('.emoji-picker')&&!e.target.closest('.add-reaction-btn')){
-      document.querySelectorAll('.emoji-picker.open').forEach(function(el){el.classList.remove('open');});
-    }
-  });
-
-</script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getDatabase, ref, set, onValue, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
@@ -694,6 +619,85 @@
   var last=getPref(LKEY,'');
   if(last && PLAYERS[last]){ /* stay on select screen so they choose consciously each day */ }
 })();
+</script>
+
+<script>
+  // =====================
+  // REACTIONS & COMMENTS
+  // =====================
+  window.toggleEmojiPicker=function(entryId){
+    var ep=document.getElementById('ep-'+entryId);
+    if(!ep)return;
+    var isOpen=ep.classList.contains('open');
+    // close all others
+    document.querySelectorAll('.emoji-picker.open').forEach(function(el){el.classList.remove('open');});
+    if(!isOpen)ep.classList.add('open');
+  };
+
+  window.pickEmoji=function(entryId,emoji){
+    var ep=document.getElementById('ep-'+entryId);
+    if(ep)ep.classList.remove('open');
+    toggleReaction(entryId,emoji);
+  };
+
+  window.toggleReaction=function(entryId,emoji){
+    if(!window.fbDb){console.error('Firebase not ready');return;}
+    if(!state.player){alert('בחר מפיק קודם');return;}
+    var myKey=state.player.key;
+    var current=state.reactions&&state.reactions[entryId]&&state.reactions[entryId][myKey];
+    var path='reactions/'+entryId+'/'+myKey;
+    if(current===emoji){
+      // הסר תגובה
+      window.fbRemove(window.fbRef(window.fbDb,path));
+    } else {
+      // הוסף/שנה תגובה
+      window.fbSet(window.fbRef(window.fbDb,path),emoji);
+    }
+  };
+
+  window.toggleComments=function(entryId){
+    var cs=document.getElementById('cs-'+entryId);
+    var tc=document.getElementById('tc-'+entryId);
+    if(!cs)return;
+    var open=cs.style.display==='block';
+    cs.style.display=open?'none':'block';
+    if(tc){
+      var comments=state.comments&&state.comments[entryId]?Object.values(state.comments[entryId]):{};
+      var count=Object.keys(comments).length;
+      tc.innerHTML=open?(count>0?'💬 '+count+' תגובות ▸':'💬 הגב'):(count>0?'💬 '+count+' תגובות ▾':'💬 הגב ▾');
+    }
+    // focus input
+    if(!open){
+      var ci=document.getElementById('ci-'+entryId);
+      if(ci)setTimeout(function(){ci.focus();},50);
+    }
+  };
+
+  window.sendComment=function(entryId){
+    if(!window.fbDb){console.error('Firebase not ready');return;}
+    if(!state.player){alert('בחר מפיק קודם');return;}
+    var ci=document.getElementById('ci-'+entryId);
+    if(!ci)return;
+    var text=ci.value.trim();
+    if(!text)return;
+    var commentId='c_'+Date.now();
+    var comment={
+      player:state.player.key,
+      playerName:state.player.name,
+      text:text,
+      t:Date.now()
+    };
+    window.fbSet(window.fbRef(window.fbDb,'comments/'+entryId+'/'+commentId),comment);
+    ci.value='';
+  };
+
+  // Close emoji picker when clicking outside
+  document.addEventListener('click',function(e){
+    if(!e.target.closest('.emoji-picker')&&!e.target.closest('.add-reaction-btn')){
+      document.querySelectorAll('.emoji-picker.open').forEach(function(el){el.classList.remove('open');});
+    }
+  });
+
 </script>
 </body>
 </html>
