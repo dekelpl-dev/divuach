@@ -229,6 +229,25 @@
     font-family:'Heebo',sans-serif;cursor:pointer;padding:0;margin-top:4px;}
   .toggle-comments:hover{color:var(--purple);}
 
+  /* comment reactions */
+  .comment-item{position:relative;}
+  .comment-body{flex:1;min-width:0;}
+  .comment-reactions{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:4px;}
+  .c-react-btn{background:rgba(255,255,255,0.05);border:1px solid var(--line);border-radius:14px;
+    padding:2px 7px;font-size:12px;cursor:pointer;color:var(--ink);display:inline-flex;
+    align-items:center;gap:3px;font-family:'Heebo',sans-serif;transition:all 0.15s;}
+  .c-react-btn:hover{background:rgba(255,255,255,0.12);transform:scale(1.08);}
+  .c-react-btn.active{border-color:var(--cyan);background:rgba(34,230,255,0.12);}
+  .c-react-btn .count{font-size:10px;color:var(--dim);}
+  .c-add-react{background:transparent;border:1px dashed var(--line);border-radius:14px;
+    padding:2px 7px;font-size:12px;cursor:pointer;color:var(--dim);transition:all 0.15s;}
+  .c-add-react:hover{border-color:var(--purple);color:var(--purple);}
+  .c-emoji-picker{display:none;flex-wrap:wrap;gap:4px;margin-top:6px;background:#0e0722;
+    border:2px solid var(--line);border-radius:10px;padding:8px;}
+  .c-emoji-picker.open{display:flex;}
+  .c-emoji-opt{font-size:18px;cursor:pointer;padding:3px;border-radius:6px;transition:transform 0.1s;}
+  .c-emoji-opt:hover{transform:scale(1.3);background:rgba(255,255,255,0.08);}
+
 </style>
 </head>
 <body>
@@ -351,7 +370,7 @@
   function getPref(k,d){ try{ var v=localStorage.getItem(k); return v===null?d:v; }catch(e){ return mem[k]!==undefined?mem[k]:d; } }
   function setPref(k,v){ mem[k]=v; try{ localStorage.setItem(k,v); }catch(e){} }
 
-  var state={ entries:load(), player:null, mood:3, filter:'all', sound:getPref(SKEY,'1')==='1', cloud:false, reactions:{}, comments:{} };
+  var state={ entries:load(), player:null, mood:3, filter:'all', sound:getPref(SKEY,'1')==='1', cloud:false, reactions:{}, comments:{}, commentReactions:{} };
 
   // ---- cloud sync (Firebase, same project as the World Cup app) ----
   var DATA_PATH='producers-arcade/entries';
@@ -371,6 +390,10 @@
     });
     window.fbOnValue(window.fbRef(window.fbDb, 'comments'), function(snap){
       state.comments=snap.val()||{};
+      if(state.player) renderFeed();
+    });
+    window.fbOnValue(window.fbRef(window.fbDb, 'commentReactions'), function(snap){
+      state.commentReactions=snap.val()||{};
       if(state.player) renderFeed();
     });
   }
@@ -564,7 +587,31 @@
         var commentsHtml=comments.map(function(c){
           var ccls=c.player||'';var ct='';
           try{ct=new Date(c.t).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'});}catch(x){}
-          return '<div class="comment-item"><span class="chip comment-chip '+ccls+'">'+esc(c.playerName||'')+'</span><div><div class="comment-text">'+esc(c.text)+'</div><div class="comment-time">'+ct+'</div></div></div>';
+          var cId=c.id||('c_'+c.t);
+          // comment reactions
+          var cReactions=state.commentReactions&&state.commentReactions[cId]?state.commentReactions[cId]:{};
+          var cEmojis={};
+          Object.entries(cReactions).forEach(function(kv){var em=kv[1];if(!cEmojis[em])cEmojis[em]=[];cEmojis[em].push(kv[0]);});
+          var myKey=state.player?state.player.key:null;
+          var cReactHtml=Object.entries(cEmojis).map(function(kv){
+            var em=kv[0],users=kv[1];
+            var iMine=myKey&&users.indexOf(myKey)>-1;
+            return '<button class="c-react-btn'+(iMine?' active':'')+'" onclick="toggleCommentReaction(\''+cId+'\',\''+em+'\')" title="'+users.map(function(k){return PLAYERS[k]?PLAYERS[k].name:k;}).join(', ')+'">'+em+' <span class="count">'+users.length+'</span></button>';
+          }).join('');
+          cReactHtml+='<button class="c-add-react" onclick="toggleCommentEmojiPicker(\''+cId+'\')" title="הגב">＋😊</button>';
+          return '<div class="comment-item" id="ci-wrap-'+cId+'">'
+            +'<span class="chip comment-chip '+ccls+'">'+esc(c.playerName||'')+'</span>'
+            +'<div class="comment-body">'
+              +'<div class="comment-text">'+esc(c.text)+'</div>'
+              +'<div class="comment-time">'+ct+'</div>'
+              +'<div class="comment-reactions">'+cReactHtml+'</div>'
+              +'<div class="c-emoji-picker" id="cep-'+cId+'">'
+                +['😂','🔥','👏','💪','😍','🤦','😅','🙌','👑','🎯','❤️','🥲','💀','😎','🤩'].map(function(em){
+                  return '<span class="c-emoji-opt" onclick="pickCommentEmoji(\''+cId+'\',\''+em+'\')" title="'+em+'">'+em+'</span>';
+                }).join('')
+              +'</div>'
+            +'</div>'
+          +'</div>';
         }).join('');
         var hasComments=comments.length>0;
         return '<div class="entry" id="entry-'+eId+'">'+
@@ -690,6 +737,7 @@
     if(!text)return;
     var commentId='c_'+Date.now();
     var comment={
+      id:commentId,
       player:state.player.key,
       playerName:state.player.name,
       text:text,
@@ -704,7 +752,37 @@
     if(!e.target.closest('.emoji-picker')&&!e.target.closest('.add-reaction-btn')){
       document.querySelectorAll('.emoji-picker.open').forEach(function(el){el.classList.remove('open');});
     }
+    if(!e.target.closest('.c-emoji-picker')&&!e.target.closest('.c-add-react')){
+      document.querySelectorAll('.c-emoji-picker.open').forEach(function(el){el.classList.remove('open');});
+    }
   });
+
+  window.toggleCommentEmojiPicker=function(commentId){
+    var ep=document.getElementById('cep-'+commentId);
+    if(!ep)return;
+    var isOpen=ep.classList.contains('open');
+    document.querySelectorAll('.c-emoji-picker.open').forEach(function(el){el.classList.remove('open');});
+    if(!isOpen)ep.classList.add('open');
+  };
+
+  window.pickCommentEmoji=function(commentId,emoji){
+    var ep=document.getElementById('cep-'+commentId);
+    if(ep)ep.classList.remove('open');
+    toggleCommentReaction(commentId,emoji);
+  };
+
+  window.toggleCommentReaction=function(commentId,emoji){
+    if(!window.fbDb){console.error('Firebase not ready');return;}
+    if(!state.player){alert('בחר מפיק קודם');return;}
+    var myKey=state.player.key;
+    var current=state.commentReactions&&state.commentReactions[commentId]&&state.commentReactions[commentId][myKey];
+    var path='commentReactions/'+commentId+'/'+myKey;
+    if(current===emoji){
+      window.fbRemove(window.fbRef(window.fbDb,path));
+    } else {
+      window.fbSet(window.fbRef(window.fbDb,path),emoji);
+    }
+  };
 
 </script>
 </body>
