@@ -559,6 +559,17 @@
   // ---- feed ----
   function renderFeed(){
     var feed=$('#feed');
+    // שמור מצב פתיחה + טקסט לפני render
+    var openSections={};
+    var savedInputs={};
+    document.querySelectorAll('.comments-section').forEach(function(el){
+      if(el.style.display==='block'){
+        var id=el.id.replace('cs-','');
+        openSections[id]=true;
+        var inp=document.getElementById('ci-'+id);
+        if(inp&&inp.value) savedInputs[id]=inp.value;
+      }
+    });
     var list=state.entries.slice().filter(function(e){return state.filter==='all'||e.player===state.filter;});
     list.sort(function(a,b){ return a.date<b.date?1:a.date>b.date?-1:(a.savedAt<b.savedAt?1:-1); });
     if(!list.length){ feed.innerHTML='<div class="empty">אין דיווחים עדיין — תהיה הראשון! ▸</div>'; return; }
@@ -637,6 +648,22 @@
       }).join('');
       return '<div class="daygroup"><div class="daylabel">📅 '+esc(prettyDate(d))+'</div>'+rows+'</div>';
     }).join('');
+
+    // שחזר sections פתוחים + טקסט שנכתב
+    Object.keys(openSections).forEach(function(id){
+      var cs=document.getElementById('cs-'+id);
+      if(cs) cs.style.display='block';
+      var tc=document.getElementById('tc-'+id);
+      if(tc){
+        var comments=state.comments&&state.comments[id]?Object.values(state.comments[id]):{};
+        var count=Object.keys(comments).length;
+        tc.innerHTML=count>0?'💬 '+count+' תגובות ▾':'💬 הגב ▾';
+      }
+      if(savedInputs[id]){
+        var inp=document.getElementById('ci-'+id);
+        if(inp){ inp.value=savedInputs[id]; inp.focus(); }
+      }
+    });
   }
 
   function render(){ renderStats(); renderFeed(); }
