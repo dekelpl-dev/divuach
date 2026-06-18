@@ -351,7 +351,7 @@
   function getPref(k,d){ try{ var v=localStorage.getItem(k); return v===null?d:v; }catch(e){ return mem[k]!==undefined?mem[k]:d; } }
   function setPref(k,v){ mem[k]=v; try{ localStorage.setItem(k,v); }catch(e){} }
 
-  var state={ entries:load(), player:null, mood:3, filter:'all', sound:getPref(SKEY,'1')==='1', cloud:false };
+  var state={ entries:load(), player:null, mood:3, filter:'all', sound:getPref(SKEY,'1')==='1', cloud:false, reactions:{}, comments:{} };
 
   // ---- cloud sync (Firebase, same project as the World Cup app) ----
   var DATA_PATH='producers-arcade/entries';
@@ -364,6 +364,14 @@
       state.entries=Object.keys(val).map(function(k){ var e=val[k]||{}; e.id=k; return e; });
       save(state.entries);              // keep a local cache/backup
       if(state.player) render();
+    });
+    window.fbOnValue(window.fbRef(window.fbDb, 'reactions'), function(snap){
+      state.reactions=snap.val()||{};
+      if(state.player) renderFeed();
+    });
+    window.fbOnValue(window.fbRef(window.fbDb, 'comments'), function(snap){
+      state.comments=snap.val()||{};
+      if(state.player) renderFeed();
     });
   }
   function cloudWrite(rec){
